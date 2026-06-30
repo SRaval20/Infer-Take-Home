@@ -1,12 +1,16 @@
 # Insurance Policy Fetcher
 
-A web app that automates login to insurance carrier portals and retrieves your policy documents. Built with React, Node.js/Express, WebSockets, and Playwright.
+A web app that automates login to insurance carrier portals and retrieves your policy documents as PDFs.
+
+**Live demo:** https://endearing-empathy-production-381e.up.railway.app
+
+> If you have any difficulty accessing the app or running it locally, reach out at **raval.sagar.sr@gmail.com**
 
 ---
 
 ## Supported Carriers
 
-| Carrier | Login | MFA | Documents |
+| Carrier | Login | MFA | Output |
 |---|---|---|---|
 | Progressive | ✅ | ✅ Email code | PDF of policy details page |
 | Geico | ✅ | ✅ Email code | PDF of account overview page |
@@ -24,14 +28,14 @@ React (Vite)  ──WebSocket──►  Express + ws  ──►  Playwright (Chr
 ```
 
 **Flow:**
-1. User picks carrier, enters credentials in the UI
+1. User picks carrier and enters credentials in the UI
 2. Frontend opens a WebSocket to the backend and sends a `start` event
-3. Backend launches a stealth Chromium browser, navigates to the carrier portal
-4. Status events stream back over WebSocket: `logging_in → mfa_required → fetching_docs → complete`
-5. If MFA is required, the UI surfaces an input field. The user enters the code — it gets sent back over the same WebSocket and injected into the browser
+3. Backend launches a stealth Chromium browser and navigates to the carrier portal
+4. Status events stream back in real time: `logging_in → mfa_required → fetching_docs → complete`
+5. If MFA is required, the UI surfaces an input field. The user enters the code — it is sent back over the same WebSocket and injected into the browser
 6. After login, the account page is captured as a PDF and served back as a downloadable link
 
-**Session reuse:** after a successful login, the browser's storage state (cookies, localStorage) is saved to `backend/sessions/`. On the next run for the same carrier + username, the backend attempts to resume that session — skipping login and MFA entirely.
+**Session reuse:** after a successful login, the browser's storage state (cookies, localStorage) is saved to `backend/sessions/`. On the next run for the same carrier + username, the backend resumes that session directly — skipping login and MFA entirely.
 
 ---
 
@@ -40,6 +44,7 @@ React (Vite)  ──WebSocket──►  Express + ws  ──►  Playwright (Chr
 - **Frontend:** React 18, Vite, vanilla CSS
 - **Backend:** Node.js, Express, `ws` (WebSockets)
 - **Automation:** Playwright + `playwright-extra` + `puppeteer-extra-plugin-stealth`
+- **Hosting:** Railway (backend + frontend as separate services)
 - **Session storage:** JSON files on disk (cookies only, never credentials)
 
 ---
@@ -63,7 +68,7 @@ cd infer-take-home
 ```bash
 cd backend
 cp .env.example .env
-npm install          # also runs: playwright install chromium
+npm install
 npm run dev
 ```
 
@@ -78,11 +83,7 @@ npm install
 npm run dev
 ```
 
-Frontend starts on `http://localhost:5173`.
-
-### 4. Open the app
-
-Navigate to `http://localhost:5173`, pick a carrier, enter your credentials, and follow the prompts.
+Frontend starts on `http://localhost:5173`. Open that URL in your browser.
 
 ---
 
@@ -96,31 +97,33 @@ Navigate to `http://localhost:5173`, pick a carrier, enter your credentials, and
 | `NODE_ENV` | `development` | Set to `production` on Railway |
 | `SESSION_DIR` | `./sessions` | Where browser session state is stored |
 | `FRONTEND_URL` | `http://localhost:5173` | Allowed CORS origin |
-| `PROXY_SERVER` | _(unset)_ | Optional residential proxy (see Anti-Bot section) |
+| `PROXY_SERVER` | _(unset)_ | Optional residential proxy — see Anti-Bot section |
 
 ### Frontend (`frontend/.env`)
 
 | Variable | Default | Description |
 |---|---|---|
-| `VITE_WS_URL` | `ws://localhost:3001/ws` | WebSocket URL — set to `wss://your-backend.railway.app/ws` in production |
-| `VITE_BACKEND_URL` | `http://localhost:3001` | Backend base URL for serving PDFs — set to `https://your-backend.railway.app` in production |
+| `VITE_WS_URL` | `ws://localhost:3001/ws` | WebSocket URL |
+| `VITE_BACKEND_URL` | `http://localhost:3001` | Backend base URL for serving PDFs |
+
+For production these are set to:
+- `VITE_WS_URL` = `wss://infer-take-home-production.up.railway.app/ws`
+- `VITE_BACKEND_URL` = `https://infer-take-home-production.up.railway.app`
 
 ---
 
 ## Security & Credential Handling
 
-**Your credentials never touch disk.** Here is exactly what happens to them:
+**Credentials never touch disk.** The full lifecycle:
 
 1. Typed into the React form → held in React component state (browser memory only)
-2. Sent over WebSocket to the backend → held in a JS variable in `AutomationEngine`
+2. Sent over WebSocket (`wss://` in production — encrypted in transit) → held in a JS variable in `AutomationEngine`
 3. Typed into the carrier portal by Playwright
 4. Discarded when the session ends
 
-**What IS saved to disk:** the browser's storage state (cookies, session tokens) in `backend/sessions/`. This is equivalent to what your browser stores when you check "Remember me" — it contains auth tokens, not your password.
+**What IS saved to disk:** browser storage state (cookies, session tokens) in `backend/sessions/`. This is equivalent to what your browser saves when you check "Remember me" — it contains auth tokens, not passwords.
 
 **No logging:** the backend has zero `console.log` statements that touch user data.
-
-**In production:** Railway terminates TLS, so the WebSocket connection is `wss://` (encrypted in transit). Credentials are never sent in plaintext over the network.
 
 **Intended use:** personal use — one user, their own insurance accounts. Not architected as a multi-tenant service.
 
@@ -131,23 +134,35 @@ Navigate to `http://localhost:5173`, pick a carrier, enter your credentials, and
 | Technique | Implementation | Effect |
 |---|---|---|
 | Stealth plugin | `puppeteer-extra-plugin-stealth` | Patches ~15 automation signals: `navigator.webdriver`, `chrome.runtime`, WebGL vendor, etc. |
-| Realistic user agent | Hardcoded Windows Chrome UA in `browserFactory.js` | Avoids headless UA strings |
-| Human-like typing | Random 50–130ms delay between keystrokes in `BaseCarrier.humanType()` | Defeats keystroke timing analysis |
-| Proper viewport + locale | 1280×800, `en-US`, `America/Chicago` | Matches a typical US user profile |
+| Realistic user agent | Windows Chrome UA hardcoded in `browserFactory.js` | Avoids headless UA strings |
+| Human-like typing | Random 50–130ms delay per keystroke in `BaseCarrier.humanType()` | Defeats keystroke timing analysis |
+| Viewport + locale | 1280×800, `en-US`, `America/Chicago` | Matches a typical US user profile |
 
-**Residential proxies:** datacenter IPs (Railway, AWS, GCP) are flagged by Akamai and PerimeterX by default. A residential proxy routes traffic through real ISP IPs and is the production-grade fix. The proxy config is wired up in `browserFactory.js` and takes one env var:
+**On datacenter IPs (Railway):** both Progressive and Geico loaded without blocks during testing. If a carrier starts fingerprint-blocking in production, the fix is a residential proxy — wired up in `browserFactory.js` and takes one env var:
 
 ```bash
 PROXY_SERVER=http://user:pass@proxy-host:port
 ```
 
-Both Progressive and Geico loaded without blocks during testing on Railway's datacenter IPs. If a carrier starts blocking, adding a residential proxy is the fix.
+Residential proxies (BrightData, Oxylabs, ~$15/mo) route traffic through real ISP IPs and are the production-grade solution for sustained blocking.
 
 ---
 
 ## Deployment (Railway)
 
-See the step-by-step guide below.
+The app is deployed as two Railway services under one project.
+
+**Backend service**
+- Root directory: `backend/`
+- Uses `backend/Dockerfile` (installs Chromium + all system deps)
+- Env vars: `NODE_ENV=production`, `PORT=3001`, `FRONTEND_URL=<frontend-url>`
+
+**Frontend service**
+- Root directory: `frontend/`
+- Uses `frontend/Dockerfile` (Vite build → served with `serve`)
+- Env vars: `VITE_WS_URL=wss://<backend-url>/ws`, `VITE_BACKEND_URL=https://<backend-url>`
+
+Railway project: https://railway.com/project/b4a2a3d3-c42b-46a3-a5d9-e3ed7e666630
 
 ---
 
@@ -172,9 +187,8 @@ See the step-by-step guide below.
 │   │   └── index.js                    # Express + WebSocket server entry
 │   ├── sessions/                        # gitignored — browser storage state per carrier+user
 │   ├── output/                          # gitignored — generated PDFs
-│   ├── scripts/
-│   │   └── recon.js                    # Dev tool: dump page selectors for a given URL
-│   └── .env.example
+│   └── scripts/
+│       └── recon.js                    # Dev tool: dump page selectors for a given URL
 │
 └── frontend/
     └── src/
@@ -192,6 +206,7 @@ See the step-by-step guide below.
 
 ## Known Limitations
 
-- **Single concurrent user:** no job queue — parallel users would need a session pool
-- **MFA timeout:** if the user doesn't enter the MFA code within ~10 minutes, the carrier portal expires it and the flow fails
-- **Hosted IP blocking:** see Anti-Bot section above — residential proxy is the fix if needed
+- **Single concurrent user:** no job queue — parallel sessions would need a browser pool
+- **MFA timeout:** if the user doesn't enter the code within ~10 minutes, the carrier portal expires it and the flow fails with a timeout error
+- **Hosted IP blocking:** see Anti-Bot section — residential proxy is the fix if needed
+- **PDF fidelity:** PDFs are generated from the live authenticated page via `page.pdf()`. Content accuracy depends on what the carrier renders post-login
