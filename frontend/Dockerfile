@@ -5,8 +5,8 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 
-ARG VITE_WS_URL
-ARG VITE_BACKEND_URL
+ARG VITE_WS_URL=wss://infer-take-home-production.up.railway.app/ws
+ARG VITE_BACKEND_URL=https://infer-take-home-production.up.railway.app
 ENV VITE_WS_URL=$VITE_WS_URL
 ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
 
