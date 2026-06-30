@@ -208,5 +208,5 @@ Railway project: https://railway.com/project/b4a2a3d3-c42b-46a3-a5d9-e3ed7e66663
 
 - **Single concurrent user:** no job queue — parallel sessions would need a browser pool
 - **MFA timeout:** if the user doesn't enter the code within ~10 minutes, the carrier portal expires it and the flow fails with a timeout error
-- **Hosted IP blocking:** see Anti-Bot section — residential proxy is the fix if needed
+- **Hosted IP blocking:** Both Progressive and Geico block Railway's datacenter IP range. The residential proxy integration is fully implemented (`PROXY_SERVER` env var, wired in `browserFactory.js`), but Railway's networking restricts outbound to ports 80/443 while BrightData residential proxy requires port 22225/33335 — making them incompatible. **The app works fully when run locally** (home IP passes carrier checks). For a production hosted deployment, the fix is a proxy provider that tunnels over port 443, or a VPS (DigitalOcean, Hetzner) where outbound ports aren't restricted.
 - **PDF fidelity:** PDFs are generated from the live authenticated page via `page.pdf()`. Content accuracy depends on what the carrier renders post-login
