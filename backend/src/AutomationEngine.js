@@ -29,19 +29,20 @@ class AutomationEngine {
 
   async run() {
     const CarrierClass = CARRIERS[this.carrierKey];
-    if (!CarrierClass) throw new Error(`Unknown carrier: ${this.carrierKey}`);
+    if (!CarrierClass) {
+      this.emit('error', { message: `Unknown carrier: ${this.carrierKey}` });
+      return;
+    }
 
     this.emit('status', { step: 'starting' });
 
-    const savedState = SessionManager.load(this.carrierKey, this.username);
-    this.browser = await createBrowser();
-    this.context = await createContext(this.browser, savedState);
-    this.page = await this.context.newPage();
-
-    this.carrierInstance = new CarrierClass(this.page, (type, payload) => this.emit(type, payload));
-
     try {
-      // Try session resume first if we have saved state
+      const savedState = SessionManager.load(this.carrierKey, this.username);
+      this.browser = await createBrowser();
+      this.context = await createContext(this.browser, savedState);
+      this.page = await this.context.newPage();
+      this.carrierInstance = new CarrierClass(this.page, (type, payload) => this.emit(type, payload));
+
       if (savedState) {
         this.emit('status', { step: 'resuming_session' });
         const resumed = await this.carrierInstance.tryResumeSession();
@@ -56,13 +57,12 @@ class AutomationEngine {
       this.emit('status', { step: 'fetching_docs' });
       this.documents = await this.carrierInstance.fetchDocuments();
 
-      // Persist session for next run
       const state = await this.context.storageState();
       SessionManager.save(this.carrierKey, this.username, state);
 
       this.emit('complete', { documents: this.documents });
     } catch (err) {
-      this.emit('error', { message: err.message, retryable: false });
+      this.emit('error', { message: err.message || 'Unexpected error occurred' });
     } finally {
       await this.cleanup();
     }
