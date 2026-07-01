@@ -45,8 +45,11 @@ class ProgressiveCarrier extends BaseCarrier {
       const code = await this.waitForMFA();
       await this.humanType(this.page.locator('[data-pgr-id="inputOtp"]'), code);
       await this.page.locator('[data-pgr-id="buttonOtpFormSubmit"]').click();
+      await this.page.waitForTimeout(5000);
+      this.emit('status', { step: 'logging_in', debug: this.page.url() });
       await Promise.race([
         this.page.waitForURL('**account-home**', { timeout: 30000 }),
+        this.page.waitForURL('**policyservicing**', { timeout: 30000 }),
         this.page.waitForSelector('[data-pgr-id^="ttlStandardManagedTile"]', { timeout: 30000 }),
       ]);
     }
