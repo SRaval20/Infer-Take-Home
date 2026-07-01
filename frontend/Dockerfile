@@ -5,8 +5,8 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 
-ARG VITE_WS_URL=wss://infer-take-home.onrender.com/ws
-ARG VITE_BACKEND_URL=https://infer-take-home.onrender.com
+ARG VITE_WS_URL=ws://64.225.42.181:3001/ws
+ARG VITE_BACKEND_URL=http://64.225.42.181:3001
 ENV VITE_WS_URL=$VITE_WS_URL
 ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
 
