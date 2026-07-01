@@ -11,13 +11,17 @@ class GeicoCarrier extends BaseCarrier {
     return this._isOnAccountPortal();
   }
 
-  // A valid authenticated session redirects away from www.geico.com (the marketing/login
-  // domain) to an account subdomain (ecams.geico.com, portfolio.geico.com, etc). An invalid
-  // or expired session simply stays on www.geico.com — its URL doesn't contain "/login" or
-  // "/mfa" literally, so checking those alone isn't enough to detect a failed resume.
-  _isOnAccountPortal() {
-    const url = new URL(this.page.url());
-    return url.hostname !== 'www.geico.com' && !url.pathname.includes('/login') && !url.pathname.includes('/mfa');
+  // Geico has multiple distinct login forms across different domains/paths (www.geico.com/account,
+  // ecams.geico.com root, etc) that don't reliably contain "/login" or "/mfa" in their URL — so URL
+  // pattern matching alone is too fragile. The one thing every login form has in common is a visible
+  // password field, so we check for that directly instead of trusting the URL.
+  async _isOnAccountPortal() {
+    const hasPasswordField = await this.page
+      .locator('input[type="password"]')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    return !hasPasswordField;
   }
 
   async login(username, password) {
@@ -31,13 +35,13 @@ class GeicoCarrier extends BaseCarrier {
     await this.page.waitForLoadState('networkidle', { timeout: 25000 });
     const url = this.page.url();
 
-    if (url.includes('geico.com') && url.includes('/login')) {
-      throw new Error('Login failed — please check your credentials');
-    }
-
     if (url.includes('/mfa/options')) {
       await this._handleMFAOptions();
       return;
+    }
+
+    if (!(await this._isOnAccountPortal())) {
+      throw new Error('Login failed — please check your credentials');
     }
 
     // No MFA — already on account portal
@@ -73,18 +77,20 @@ class GeicoCarrier extends BaseCarrier {
     await this.page.getByRole('button', { name: 'Submit Code' }).click({ force: true });
 
     // Wait until we land on the actual account portal — not just "any page that isn't /mfa",
-    // since Geico can bounce through transient redirects (including back to /login) before settling.
-    // Geico's post-login destination domain has changed before (ecams.geico.com -> portfolio.geico.com),
-    // so we only check the path, not a specific hostname.
-    await this.page.waitForFunction(
-      () => {
-        const { pathname } = window.location;
-        return !pathname.includes('/mfa') && !pathname.includes('/login');
-      },
-      undefined,
-      { timeout: 25000 }
-    );
+    // since Geico can bounce through transient redirects (including back to a login form) before
+    // settling, and its destination domain/path has changed before, so URL matching alone isn't
+    // reliable — poll for the absence of a password field instead.
+    await this._waitForAccountPortal(25000);
     await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+  }
+
+  async _waitForAccountPortal(timeout) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      if (await this._isOnAccountPortal()) return;
+      await this.page.waitForTimeout(500);
+    }
+    throw new Error('Timed out waiting to reach the account portal after MFA');
   }
 
   async fetchDocuments() {
@@ -98,7 +104,7 @@ class GeicoCarrier extends BaseCarrier {
     // Extra buffer for the account content to fully paint
     await this.page.waitForTimeout(3000);
 
-    if (!this._isOnAccountPortal()) {
+    if (!(await this._isOnAccountPortal())) {
       throw new Error('Session did not reach the account portal — landed on login/MFA page instead');
     }
 
