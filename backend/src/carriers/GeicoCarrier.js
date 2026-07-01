@@ -86,7 +86,7 @@ class GeicoCarrier extends BaseCarrier {
     // since Geico can bounce through transient redirects (including back to a login form) before
     // settling, and its destination domain/path has changed before, so URL matching alone isn't
     // reliable — poll for absence of both a password field and the verification-code field instead.
-    await this._waitForAccountPortal(25000);
+    await this._waitForAccountPortal(45000);
     await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   }
 
