@@ -12,7 +12,7 @@ A web app that automates login to insurance carrier portals and retrieves your p
 
 This was built end-to-end with [Claude Code](https://claude.com/claude-code) — architecture planning, carrier automation, and a long iterative debugging process on hosting/anti-bot strategy.
 
-**Full session transcript(s):** _\<add link(s) here\>_
+**Full session transcript:** https://sraval20.github.io/Infer-Take-Home/session-transcript/
 
 The transcript is the real, unedited back-and-forth — including the dead ends: several hosting attempts before landing on the current setup (see [Deployment](#deployment)), a proxy provider blocked by a business KYC requirement, a couple of real bugs introduced and then found/fixed/reverted, and repeated debugging of carrier-side page structure changing mid-project. Nothing here is a cleaned-up retelling.
 
