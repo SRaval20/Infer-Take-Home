@@ -5,8 +5,8 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 
-ARG VITE_WS_URL=ws://64.225.42.181:3001/ws
-ARG VITE_BACKEND_URL=http://64.225.42.181:3001
+ARG VITE_WS_URL=wss://chess-align-intermediate-ons.trycloudflare.com/ws
+ARG VITE_BACKEND_URL=https://chess-align-intermediate-ons.trycloudflare.com
 ENV VITE_WS_URL=$VITE_WS_URL
 ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
 
