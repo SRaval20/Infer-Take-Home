@@ -6,10 +6,15 @@ const OUTPUT_DIR = path.join(__dirname, '../../output');
 
 class ProgressiveCarrier extends BaseCarrier {
   async tryResumeSession() {
-    // Valid session auto-redirects from login to account-home
+    // Valid session auto-redirects from login through a transitional auth-entry-headless page
+    // (with "accountHome" as a query param, no hyphen) before settling on the final dashboard
+    // URL (which does use "account-home"). A fixed short wait can catch this mid-redirect over
+    // a slow connection, so wait for the network to settle rather than a fixed timeout.
     await this.page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 20000 });
-    await this.page.waitForTimeout(3000);
-    return this.page.url().includes('account-home');
+    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+    await this.page.waitForTimeout(2000);
+    const url = this.page.url().toLowerCase();
+    return url.includes('accounthome') || url.includes('account-home');
   }
 
   async login(username, password) {
