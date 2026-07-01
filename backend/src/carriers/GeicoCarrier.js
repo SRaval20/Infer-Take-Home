@@ -64,11 +64,16 @@ class GeicoCarrier extends BaseCarrier {
     await this.page.keyboard.type(code, { delay: 80 });
     await this.page.getByRole('button', { name: 'Submit Code' }).click({ force: true });
 
-    // Wait until we leave the MFA flow
+    // Wait until we land on the actual account portal — not just "any page that isn't /mfa",
+    // since Geico can bounce through transient redirects (including back to /login) before settling.
     await this.page.waitForFunction(
-      () => !window.location.pathname.includes('/mfa'),
+      () => {
+        const { hostname, pathname } = window.location;
+        return hostname.includes('ecams.geico.com') && !pathname.includes('/mfa') && !pathname.includes('/login');
+      },
       { timeout: 20000 }
     );
+    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   }
 
   async fetchDocuments() {
@@ -81,6 +86,11 @@ class GeicoCarrier extends BaseCarrier {
 
     // Extra buffer for the account content to fully paint
     await this.page.waitForTimeout(3000);
+
+    const url = this.page.url();
+    if (url.includes('/login') || url.includes('/mfa')) {
+      throw new Error('Session did not reach the account portal — landed on login/MFA page instead');
+    }
 
     const isHeadless = process.env.HEADLESS !== 'false';
     if (!isHeadless) {
