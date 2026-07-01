@@ -71,8 +71,12 @@ class GeicoCarrier extends BaseCarrier {
         const { hostname, pathname } = window.location;
         return hostname.includes('ecams.geico.com') && !pathname.includes('/mfa') && !pathname.includes('/login');
       },
-      { timeout: 20000 }
-    );
+      undefined,
+      { timeout: 25000 }
+    ).catch((err) => {
+      console.error('[geico] post-MFA URL check failed, landed on:', this.page.url());
+      throw err;
+    });
     await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   }
 
