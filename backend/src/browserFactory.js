@@ -23,22 +23,25 @@ const CONTEXT_OPTIONS = {
 };
 
 async function createBrowser({ headless = process.env.HEADLESS !== 'false' } = {}) {
-  const launchOptions = { headless, args: LAUNCH_ARGS };
+  const args = [...LAUNCH_ARGS];
   if (process.env.PROXY_SERVER) {
     const url = new URL(process.env.PROXY_SERVER);
-    launchOptions.proxy = {
+    args.push(`--proxy-server=${url.protocol}//${url.hostname}:${url.port}`);
+  }
+  return chromium.launch({ headless, args });
+}
+
+async function createContext(browser, savedState = null) {
+  const opts = { ...CONTEXT_OPTIONS };
+  if (process.env.PROXY_SERVER) {
+    const url = new URL(process.env.PROXY_SERVER);
+    opts.proxy = {
       server: `${url.protocol}//${url.hostname}:${url.port}`,
       username: decodeURIComponent(url.username),
       password: decodeURIComponent(url.password),
     };
   }
-  return chromium.launch(launchOptions);
-}
-
-async function createContext(browser, savedState = null) {
-  const opts = savedState
-    ? { ...CONTEXT_OPTIONS, storageState: savedState }
-    : CONTEXT_OPTIONS;
+  if (savedState) opts.storageState = savedState;
   return browser.newContext(opts);
 }
 
