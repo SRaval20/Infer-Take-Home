@@ -8,11 +8,26 @@ class GeicoCarrier extends BaseCarrier {
   async tryResumeSession() {
     await this.page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await this.page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-    const url = new URL(this.page.url());
-    // A stale/expired session just stays on www.geico.com (the login page itself) — its URL
-    // doesn't contain "/login" or "/mfa" literally, so checking those alone isn't enough.
-    // A genuinely resumed session redirects to a different Geico subdomain (ecams, portfolio, etc).
-    return url.hostname !== 'www.geico.com' && !url.pathname.includes('/login') && !url.pathname.includes('/mfa');
+    return this._isOnAccountPortal();
+  }
+
+  // Geico has multiple distinct login gates across different domains (www.geico.com/account,
+  // and a separate "Log In" page on another subdomain observed in testing), none of which
+  // reliably signal "unauthenticated" through the URL alone. The one reliable signal common to
+  // every login form is a visible password field. A visible MFA verification-code field is the
+  // other "not yet authenticated" state — checked separately so it isn't mistaken for success.
+  async _isOnAccountPortal() {
+    const hasPasswordField = await this.page
+      .locator('input[type="password"]')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const hasVerificationField = await this.page
+      .locator('input[aria-label="Verification code"], input[placeholder*="erification code" i]')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    return !hasPasswordField && !hasVerificationField;
   }
 
   async login(username, password) {
@@ -26,13 +41,13 @@ class GeicoCarrier extends BaseCarrier {
     await this.page.waitForLoadState('networkidle', { timeout: 25000 });
     const url = this.page.url();
 
-    if (url.includes('geico.com') && url.includes('/login')) {
-      throw new Error('Login failed — please check your credentials');
-    }
-
     if (url.includes('/mfa/options')) {
       await this._handleMFAOptions();
       return;
+    }
+
+    if (!(await this._isOnAccountPortal())) {
+      throw new Error('Login failed — please check your credentials');
     }
 
     // No MFA — already on account portal
@@ -68,18 +83,20 @@ class GeicoCarrier extends BaseCarrier {
     await this.page.getByRole('button', { name: 'Submit Code' }).click({ force: true });
 
     // Wait until we land on the actual account portal — not just "any page that isn't /mfa",
-    // since Geico can bounce through transient redirects (including back to /login) before settling.
-    // Geico's post-login destination domain has changed before (ecams.geico.com -> portfolio.geico.com),
-    // so we only check the path, not a specific hostname.
-    await this.page.waitForFunction(
-      () => {
-        const { pathname } = window.location;
-        return !pathname.includes('/mfa') && !pathname.includes('/login');
-      },
-      undefined,
-      { timeout: 25000 }
-    );
+    // since Geico can bounce through transient redirects (including back to a login form) before
+    // settling, and its destination domain/path has changed before, so URL matching alone isn't
+    // reliable — poll for absence of both a password field and the verification-code field instead.
+    await this._waitForAccountPortal(25000);
     await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+  }
+
+  async _waitForAccountPortal(timeout) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      if (await this._isOnAccountPortal()) return;
+      await this.page.waitForTimeout(500);
+    }
+    throw new Error('Timed out waiting to reach the account portal after MFA');
   }
 
   async fetchDocuments() {
@@ -93,8 +110,7 @@ class GeicoCarrier extends BaseCarrier {
     // Extra buffer for the account content to fully paint
     await this.page.waitForTimeout(3000);
 
-    const finalUrl = new URL(this.page.url());
-    if (finalUrl.hostname === 'www.geico.com' || finalUrl.pathname.includes('/login') || finalUrl.pathname.includes('/mfa')) {
+    if (!(await this._isOnAccountPortal())) {
       throw new Error('Session did not reach the account portal — landed on login/MFA page instead');
     }
 
