@@ -62,9 +62,11 @@ class ProgressiveCarrier extends BaseCarrier {
   }
 
   async fetchDocuments() {
-    // Click the policy tile
+    // A resumed session can land on a transitional auth-entry-headless page that still needs
+    // to redirect once more to the actual dashboard before the tile exists — give this more
+    // room than a bare page load would need, especially over the residential proxy's latency.
     const tile = this.page.locator('[data-pgr-id^="ttlStandardManagedTile"]').first();
-    await tile.waitFor({ timeout: 15000 });
+    await tile.waitFor({ timeout: 30000 });
     await tile.click();
 
     // After clicking the tile, Progressive loads policy details — wait for URL to settle
