@@ -2,7 +2,7 @@
 
 A web app that automates login to insurance carrier portals and retrieves your policy documents as PDFs.
 
-**Live demo:** https://endearing-empathy-production-381e.up.railway.app
+**Feel free to try the app yourself:** https://endearing-empathy-production-381e.up.railway.app (a walkthrough video is included with this submission — see the demo link provided alongside it)
 
 > If you have any difficulty accessing the app or running it locally, reach out at **raval.sagar.sr@gmail.com**
 
