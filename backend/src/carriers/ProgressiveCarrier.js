@@ -20,6 +20,8 @@ class ProgressiveCarrier extends BaseCarrier {
     await this.humanType(this.page.locator('[data-pgr-id="inputUserName"]'), username);
     await this.humanType(this.page.locator('[data-pgr-id="inputPassword"]'), password);
     await this.page.locator('[data-pgr-id="buttonSubmitLogin"]').click();
+    await this.page.waitForTimeout(4000);
+    this.emit('status', { step: 'logging_in', debug: `after_submit: ${this.page.url()}` });
 
     const result = await Promise.race([
       this.page.waitForURL('**account-home**', { timeout: 25000 }).then(() => 'account'),
