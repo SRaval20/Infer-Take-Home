@@ -25,7 +25,12 @@ const CONTEXT_OPTIONS = {
 async function createBrowser({ headless = process.env.HEADLESS !== 'false' } = {}) {
   const launchOptions = { headless, args: LAUNCH_ARGS };
   if (process.env.PROXY_SERVER) {
-    launchOptions.proxy = { server: process.env.PROXY_SERVER };
+    const url = new URL(process.env.PROXY_SERVER);
+    launchOptions.proxy = {
+      server: `${url.protocol}//${url.hostname}:${url.port}`,
+      username: decodeURIComponent(url.username),
+      password: decodeURIComponent(url.password),
+    };
   }
   return chromium.launch(launchOptions);
 }
