@@ -44,7 +44,7 @@ React (Vite)  ──WebSocket──►  Express + ws  ──►  Playwright (Chr
 - **Frontend:** React 18, Vite, vanilla CSS
 - **Backend:** Node.js, Express, `ws` (WebSockets)
 - **Automation:** Playwright + `playwright-extra` + `puppeteer-extra-plugin-stealth`
-- **Hosting:** Railway (backend + frontend as separate services)
+- **Hosting:** Frontend on Railway; backend runs locally, exposed via Cloudflare Tunnel (see [Deployment](#deployment) for why)
 - **Session storage:** JSON files on disk (cookies only, never credentials)
 
 ---
@@ -94,7 +94,7 @@ Frontend starts on `http://localhost:5173`. Open that URL in your browser.
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `3001` | Port the Express server listens on |
-| `NODE_ENV` | `development` | Set to `production` on Railway |
+| `NODE_ENV` | `development` | Set to `production` when running the live demo |
 | `SESSION_DIR` | `./sessions` | Where browser session state is stored |
 | `FRONTEND_URL` | `http://localhost:5173` | Allowed CORS origin |
 | `PROXY_SERVER` | _(unset)_ | Optional residential proxy — see Anti-Bot section |
@@ -106,9 +106,7 @@ Frontend starts on `http://localhost:5173`. Open that URL in your browser.
 | `VITE_WS_URL` | `ws://localhost:3001/ws` | WebSocket URL |
 | `VITE_BACKEND_URL` | `http://localhost:3001` | Backend base URL for serving PDFs |
 
-For production these are set to:
-- `VITE_WS_URL` = `wss://infer-take-home-production.up.railway.app/ws`
-- `VITE_BACKEND_URL` = `https://infer-take-home-production.up.railway.app`
+For the live demo these point to the Cloudflare Tunnel exposing the backend (see [Deployment](#deployment)).
 
 ---
 
@@ -138,31 +136,37 @@ For production these are set to:
 | Human-like typing | Random 50–130ms delay per keystroke in `BaseCarrier.humanType()` | Defeats keystroke timing analysis |
 | Viewport + locale | 1280×800, `en-US`, `America/Chicago` | Matches a typical US user profile |
 
-**On datacenter IPs (Railway):** both Progressive and Geico loaded without blocks during testing. If a carrier starts fingerprint-blocking in production, the fix is a residential proxy — wired up in `browserFactory.js` and takes one env var:
+**On datacenter IPs (Railway, Render, DigitalOcean):** both Progressive and Geico actively block traffic from cloud/datacenter IP ranges — logins either fail outright or silently hang. `browserFactory.js` supports routing through a residential proxy via one env var:
 
 ```bash
 PROXY_SERVER=http://user:pass@proxy-host:port
 ```
 
-Residential proxies (BrightData, Oxylabs, ~$15/mo) route traffic through real ISP IPs and are the production-grade solution for sustained blocking.
+In practice, residential proxy providers (tested: BrightData) gate insurance/financial-site targeting behind a business KYC verification (company email required), which isn't practical for a personal-use project. Since this app is designed for **personal use from your own residential IP** (see Security section), the simplest and most reliable path turned out to be running the backend from a real home network instead of a datacenter — see Deployment below.
 
 ---
 
-## Deployment (Railway)
+## Deployment
 
-The app is deployed as two Railway services under one project.
+**Why not a single Railway/Render/DigitalOcean deployment for everything?**
 
-**Backend service**
-- Root directory: `backend/`
-- Uses `backend/Dockerfile` (installs Chromium + all system deps)
-- Env vars: `NODE_ENV=production`, `PORT=3001`, `FRONTEND_URL=<frontend-url>`
+Progressive and Geico both block traffic from datacenter IP ranges — every PaaS/VPS provider tried (Railway, Render, DigitalOcean) got flagged. The correct production fix is a residential proxy, but every proxy provider tested requires business KYC verification to target financial/insurance sites, which blocks a personal project. Since this app is built for one person accessing their own accounts, the pragmatic solution is to run the backend from an actual residential network — which trivially passes carrier bot checks — rather than adding proxy infrastructure.
 
-**Frontend service**
-- Root directory: `frontend/`
-- Uses `frontend/Dockerfile` (Vite build → served with `serve`)
-- Env vars: `VITE_WS_URL=wss://<backend-url>/ws`, `VITE_BACKEND_URL=https://<backend-url>`
+**Current setup:**
+- **Frontend** — deployed on Railway as a static Vite build (Dockerfile-based), same as any standard deployment
+- **Backend** — runs locally (`npm run dev` in `backend/`) and is exposed publicly via [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/):
+  ```bash
+  cloudflared tunnel --url http://localhost:3001
+  ```
+  This prints a public `https://<random>.trycloudflare.com` URL, which is set as `VITE_WS_URL` / `VITE_BACKEND_URL` on the Railway frontend service (as a Docker build arg, since Vite bakes these in at build time).
 
-Railway project: https://railway.com/project/b4a2a3d3-c42b-46a3-a5d9-e3ed7e666630
+**Implication:** the live demo depends on the backend machine and tunnel staying online. If the demo link isn't responding, the backend host is likely offline — reach out (see top of README) and it can be restarted quickly.
+
+**For a fully-hosted setup** (no dependency on a personal machine), the two viable paths are:
+1. A residential proxy provider that has completed KYC for financial-site targeting, routed through `PROXY_SERVER`
+2. A dedicated small residential/business internet connection running the backend as a permanent service
+
+Railway project (frontend service): https://railway.com/project/b4a2a3d3-c42b-46a3-a5d9-e3ed7e666630
 
 ---
 
@@ -208,5 +212,6 @@ Railway project: https://railway.com/project/b4a2a3d3-c42b-46a3-a5d9-e3ed7e66663
 
 - **Single concurrent user:** no job queue — parallel sessions would need a browser pool
 - **MFA timeout:** if the user doesn't enter the code within ~10 minutes, the carrier portal expires it and the flow fails with a timeout error
-- **Hosted IP blocking:** Both Progressive and Geico block Railway's datacenter IP range. The residential proxy integration is fully implemented (`PROXY_SERVER` env var, wired in `browserFactory.js`), but Railway's networking restricts outbound to ports 80/443 while BrightData residential proxy requires port 22225/33335 — making them incompatible. **The app works fully when run locally** (home IP passes carrier checks). For a production hosted deployment, the fix is a proxy provider that tunnels over port 443, or a VPS (DigitalOcean, Hetzner) where outbound ports aren't restricted.
+- **Backend depends on a residential host machine:** see [Deployment](#deployment) — the live demo's backend runs on a personal machine tunneled via Cloudflare, since carrier bot-detection blocks every datacenter/PaaS IP tested. If the demo appears down, the host machine is likely offline.
+- **Carrier selectors are brittle by nature:** both carriers changed page structure mid-development (Progressive moved its MFA page to a new subdomain with different markup; Geico's post-MFA redirect domain changed). Selectors target stable `data-pgr-id`/`aria-label` attributes where possible, but carrier-side changes can break the flow without warning — this is an inherent tradeoff of unofficial browser automation against a third-party UI.
 - **PDF fidelity:** PDFs are generated from the live authenticated page via `page.pdf()`. Content accuracy depends on what the carrier renders post-login

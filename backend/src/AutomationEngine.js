@@ -39,9 +39,7 @@ class AutomationEngine {
     try {
       const savedState = SessionManager.load(this.carrierKey, this.username);
       this.browser = await createBrowser();
-      this.context = await createContext(this.browser, savedState);
-      this.page = await this.context.newPage();
-      this.carrierInstance = new CarrierClass(this.page, (type, payload) => this.emit(type, payload));
+      await this._initContext(CarrierClass, savedState);
 
       if (savedState) {
         this.emit('status', { step: 'resuming_session' });
@@ -52,9 +50,7 @@ class AutomationEngine {
           // start a clean context so login isn't confused by conflicting state.
           await this.page.close();
           await this.context.close();
-          this.context = await createContext(this.browser, null);
-          this.page = await this.context.newPage();
-          this.carrierInstance = new CarrierClass(this.page, (type, payload) => this.emit(type, payload));
+          await this._initContext(CarrierClass, null);
           await this._doFullLogin();
         }
       } else {
@@ -73,6 +69,12 @@ class AutomationEngine {
     } finally {
       await this.cleanup();
     }
+  }
+
+  async _initContext(CarrierClass, savedState) {
+    this.context = await createContext(this.browser, savedState);
+    this.page = await this.context.newPage();
+    this.carrierInstance = new CarrierClass(this.page, (type, payload) => this.emit(type, payload));
   }
 
   async _doFullLogin() {
