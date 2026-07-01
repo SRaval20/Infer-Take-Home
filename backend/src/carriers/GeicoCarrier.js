@@ -113,8 +113,11 @@ class GeicoCarrier extends BaseCarrier {
     // Wait for the "Please wait while we process" loading screen to disappear
     await this.page.waitForSelector('text=Please wait', { state: 'hidden', timeout: 30000 }).catch(() => {});
 
-    // Extra buffer for the account content to fully paint
-    await this.page.waitForTimeout(3000);
+    // The dashboard title can be present before its content has actually painted (seen as a
+    // genuinely blank PDF over the residential proxy's latency) — wait for the network to settle,
+    // then a longer buffer than before, rather than trusting a short fixed wait alone.
+    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+    await this.page.waitForTimeout(6000);
 
     if (!(await this._isOnAccountPortal())) {
       throw new Error('Session did not reach the account portal — landed on login/MFA page instead');
