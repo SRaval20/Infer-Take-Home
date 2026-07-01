@@ -9,7 +9,7 @@ class GeicoCarrier extends BaseCarrier {
     await this.page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await this.page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
     const url = this.page.url();
-    return url.includes('ecams.geico.com') && !url.includes('/login') && !url.includes('/mfa');
+    return url.includes('geico.com') && !url.includes('/login') && !url.includes('/mfa');
   }
 
   async login(username, password) {
@@ -23,7 +23,7 @@ class GeicoCarrier extends BaseCarrier {
     await this.page.waitForLoadState('networkidle', { timeout: 25000 });
     const url = this.page.url();
 
-    if (url.includes('ecams.geico.com') && url.includes('/login')) {
+    if (url.includes('geico.com') && url.includes('/login')) {
       throw new Error('Login failed — please check your credentials');
     }
 
@@ -66,17 +66,16 @@ class GeicoCarrier extends BaseCarrier {
 
     // Wait until we land on the actual account portal — not just "any page that isn't /mfa",
     // since Geico can bounce through transient redirects (including back to /login) before settling.
+    // Geico's post-login destination domain has changed before (ecams.geico.com -> portfolio.geico.com),
+    // so we only check the path, not a specific hostname.
     await this.page.waitForFunction(
       () => {
-        const { hostname, pathname } = window.location;
-        return hostname.includes('ecams.geico.com') && !pathname.includes('/mfa') && !pathname.includes('/login');
+        const { pathname } = window.location;
+        return !pathname.includes('/mfa') && !pathname.includes('/login');
       },
       undefined,
       { timeout: 25000 }
-    ).catch((err) => {
-      console.error('[geico] post-MFA URL check failed, landed on:', this.page.url());
-      throw err;
-    });
+    );
     await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   }
 
