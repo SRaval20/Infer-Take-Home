@@ -48,6 +48,13 @@ class AutomationEngine {
         const resumed = await this.carrierInstance.tryResumeSession();
         if (!resumed) {
           SessionManager.clear(this.carrierKey, this.username);
+          // Stale cookies from the failed session linger in this context —
+          // start a clean context so login isn't confused by conflicting state.
+          await this.page.close();
+          await this.context.close();
+          this.context = await createContext(this.browser, null);
+          this.page = await this.context.newPage();
+          this.carrierInstance = new CarrierClass(this.page, (type, payload) => this.emit(type, payload));
           await this._doFullLogin();
         }
       } else {
