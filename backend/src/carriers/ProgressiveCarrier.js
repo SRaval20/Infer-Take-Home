@@ -20,8 +20,6 @@ class ProgressiveCarrier extends BaseCarrier {
     await this.humanType(this.page.locator('[data-pgr-id="inputUserName"]'), username);
     await this.humanType(this.page.locator('[data-pgr-id="inputPassword"]'), password);
     await this.page.locator('[data-pgr-id="buttonSubmitLogin"]').click();
-    await this.page.waitForTimeout(4000);
-    this.emit('status', { step: 'logging_in', debug: `after_submit: ${this.page.url()}` });
 
     const result = await Promise.race([
       this.page.waitForURL('**account-home**', { timeout: 25000 }).then(() => 'account'),
@@ -36,7 +34,10 @@ class ProgressiveCarrier extends BaseCarrier {
     }
 
     if (result === 'mfa_select') {
-      await this.page.locator('label:has-text("Email Me"), pui-radio-medium:has-text("Email Me")').first().click();
+      await this.page
+        .locator('[data-pgr-id="puiInputLabelDevice"]:has-text("Email Me"), label:has-text("Email Me")')
+        .first()
+        .click();
       await this.page.waitForTimeout(500);
       await this.page.locator('[data-pgr-id="buttonMultiContactSelectionContinue"]').click();
       await this.page.waitForSelector('[data-pgr-id="inputOtp"]', { timeout: 15000 });
@@ -47,8 +48,6 @@ class ProgressiveCarrier extends BaseCarrier {
       const code = await this.waitForMFA();
       await this.humanType(this.page.locator('[data-pgr-id="inputOtp"]'), code);
       await this.page.locator('[data-pgr-id="buttonOtpFormSubmit"]').click();
-      await this.page.waitForTimeout(5000);
-      this.emit('status', { step: 'logging_in', debug: this.page.url() });
       await Promise.race([
         this.page.waitForURL('**account-home**', { timeout: 30000 }),
         this.page.waitForURL('**policyservicing**', { timeout: 30000 }),
