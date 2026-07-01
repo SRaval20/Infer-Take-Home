@@ -8,6 +8,16 @@ A web app that automates login to insurance carrier portals and retrieves your p
 
 ---
 
+## Development Process & AI Usage
+
+This was built end-to-end with [Claude Code](https://claude.com/claude-code) — architecture planning, carrier automation, and a long iterative debugging process on hosting/anti-bot strategy.
+
+**Full session transcript(s):** _\<add link(s) here\>_
+
+The transcript is the real, unedited back-and-forth — including the dead ends: several hosting attempts before landing on the current setup (see [Deployment](#deployment)), a proxy provider blocked by a business KYC requirement, a couple of real bugs introduced and then found/fixed/reverted, and repeated debugging of carrier-side page structure changing mid-project. Nothing here is a cleaned-up retelling.
+
+---
+
 ## Supported Carriers
 
 | Carrier | Login | MFA | Output |
@@ -39,7 +49,9 @@ React (Vite, Railway)  ──WSS──►  Caddy (auto-HTTPS)  ──►  Expres
 5. If MFA is required, the UI surfaces an input field. The user enters the code — it is sent back over the same WebSocket and injected into the browser
 6. After login, the account page is captured as a PDF and served back as a downloadable link
 
-**Session reuse:** after a successful login, the browser's storage state (cookies, localStorage) is saved to `backend/sessions/`. On the next run for the same carrier + username, the backend resumes that session directly — skipping login and MFA entirely.
+**Session reuse:** after a successful login, the browser's storage state (cookies, localStorage) is saved to `backend/sessions/`. On the next run for the same carrier + username, the backend resumes that session directly — skipping login and MFA entirely. A repeat run with a valid saved session completes in well under 10 seconds.
+
+**Latency (fresh login, no saved session):** typically 30–60 seconds from submitting credentials to the document appearing, dominated by the residential proxy hop — see [Deployment tradeoffs](#tradeoffs-of-the-current-setup-being-upfront-about-it) for why.
 
 ---
 
