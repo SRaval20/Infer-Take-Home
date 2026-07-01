@@ -5,6 +5,7 @@ const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3001/ws';
 export function useInsuranceWS() {
   const ws = useRef(null);
   const intentionalClose = useRef(false);
+  const heartbeat = useRef(null);
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState(null);
   const [documents, setDocuments] = useState([]);
@@ -27,6 +28,12 @@ export function useInsuranceWS() {
     const socket = await connect();
     ws.current = socket;
 
+    // Keep the connection alive through idle periods (e.g. waiting on the user for an MFA code) —
+    // some tunnels/proxies drop WebSockets that sit silent too long.
+    heartbeat.current = setInterval(() => {
+      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'ping' }));
+    }, 20000);
+
     socket.onmessage = (event) => {
       const { type, payload } = JSON.parse(event.data);
 
@@ -46,6 +53,7 @@ export function useInsuranceWS() {
     };
 
     socket.onclose = () => {
+      clearInterval(heartbeat.current);
       // Ignore closes triggered by reset() or component unmount
       if (!intentionalClose.current) {
         setStatus('error');
@@ -72,6 +80,7 @@ export function useInsuranceWS() {
 
   const reset = useCallback(() => {
     intentionalClose.current = true;
+    clearInterval(heartbeat.current);
     ws.current?.close();
     ws.current = null;
     sessionId.current = null;
@@ -82,6 +91,7 @@ export function useInsuranceWS() {
 
   useEffect(() => () => {
     intentionalClose.current = true;
+    clearInterval(heartbeat.current);
     ws.current?.close();
   }, []);
 
