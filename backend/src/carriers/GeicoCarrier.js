@@ -100,8 +100,14 @@ class GeicoCarrier extends BaseCarrier {
   }
 
   async fetchDocuments() {
-    // Dismiss cookie banner if present
-    const cookieBtn = this.page.locator('#onetrust-accept-btn-handler, button:has-text("Accept Cookies")').first();
+    // Dismiss cookie banner if present — Geico has served at least two different OneTrust
+    // banner variants (an "Accept Cookies" flow and a "Reject Optional Cookies" flow); either
+    // button dismisses the banner, we just need it gone before it interferes with rendering.
+    const cookieBtn = this.page
+      .locator(
+        '#onetrust-accept-btn-handler, button:has-text("Accept Cookies"), button:has-text("Reject Optional Cookies")'
+      )
+      .first();
     await cookieBtn.click({ timeout: 5000 }).catch(() => {});
 
     // Wait for the "Please wait while we process" loading screen to disappear
