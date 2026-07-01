@@ -8,8 +8,16 @@ class GeicoCarrier extends BaseCarrier {
   async tryResumeSession() {
     await this.page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
     await this.page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-    const url = this.page.url();
-    return url.includes('geico.com') && !url.includes('/login') && !url.includes('/mfa');
+    return this._isOnAccountPortal();
+  }
+
+  // A valid authenticated session redirects away from www.geico.com (the marketing/login
+  // domain) to an account subdomain (ecams.geico.com, portfolio.geico.com, etc). An invalid
+  // or expired session simply stays on www.geico.com — its URL doesn't contain "/login" or
+  // "/mfa" literally, so checking those alone isn't enough to detect a failed resume.
+  _isOnAccountPortal() {
+    const url = new URL(this.page.url());
+    return url.hostname !== 'www.geico.com' && !url.pathname.includes('/login') && !url.pathname.includes('/mfa');
   }
 
   async login(username, password) {
@@ -90,8 +98,7 @@ class GeicoCarrier extends BaseCarrier {
     // Extra buffer for the account content to fully paint
     await this.page.waitForTimeout(3000);
 
-    const url = this.page.url();
-    if (url.includes('/login') || url.includes('/mfa')) {
+    if (!this._isOnAccountPortal()) {
       throw new Error('Session did not reach the account portal — landed on login/MFA page instead');
     }
 
